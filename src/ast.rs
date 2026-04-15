@@ -1,0 +1,108 @@
+#[derive(Debug, Clone)]
+pub struct Spanned<T> {
+    pub node: T,
+    pub line: usize,
+    pub col: usize,
+}
+
+#[derive(Debug, Clone)]
+pub enum Expr {
+    String(String),
+    Number(i64),
+    Bool(bool),
+    Array(Vec<Expr>),
+    Nil,
+
+    Assign {
+        name: String,
+        value: Box<Expr>
+    },
+
+    Lambda {
+        args: Vec<String>,
+        body: Box<Expr>
+    },
+
+    Ident(String),
+
+    Block(Vec<Expr>),
+
+    Return(Option<Box<Expr>>),
+
+    If {
+        cond: Box<Expr>,
+        then: Box<Expr>,
+        else_: Option<Box<Expr>>
+    },
+
+    For {
+        var: String,
+        iter: Box<Expr>,
+        body: Box<Expr>
+    },
+
+    While {
+        cond: Box<Expr>,
+        body: Box<Expr>
+    },
+
+    Break,
+    Continue,
+
+    Mod {
+        modulus: Box<Expr>,
+        body: Box<Expr>
+    },
+
+    Range {
+        start: Box<Expr>,
+        end: Box<Expr>,
+        inclusive: bool
+    },
+
+    Call {
+        func: Box<Expr>,
+        args: Vec<Expr>
+    },
+
+    BinOp {
+        left: Box<Expr>,
+        right: Box<Expr>,
+        op: BinOp
+    },
+
+    UnaryOp {
+        op: UnaryOp,
+        expr: Box<Expr>
+    },
+
+    Index {
+        object: Box<Expr>,
+        index: Box<Expr>
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BinOp {
+    // Arithmetic
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Pow,
+    Rem,
+
+    // Comp
+    Eq, Neq,
+    Gt, Ge,
+    Lt, Le,
+    
+    // Bit
+    And, Or, Xor
+}
+
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+    Neg,
+    Not
+}

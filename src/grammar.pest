@@ -1,0 +1,64 @@
+WHITESPACE = _{ " " | "\t" | "\n" }
+
+digits  = @{ ASCII_DIGIT+ }
+number  = @{ "-"? ~ digits }
+bignum  = @{ "-"? ~ digits ~ "e" ~ digits }
+string  = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+bool    =  { "true" | "false" }
+nil     =  { "nil" }
+integer = _{ bignum | number }
+literal = _{ integer | string | bool | nil }
+
+keyword = _{ "true" | "false" | "nil" | "if" | "else" | "while" | "for" | "in" | "mod" | "return" | "break" | "continue" }
+ident   = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+program = _{ SOI ~ stmt* ~ EOI }
+stmt    = _{ expr ~ (";" | NEWLINE+) }
+
+expr    = _{ assign | lambda | if_ | while_ | for_ | mod_
+           | return_ | break_ | continue_ | or }
+
+assign      =  { ident ~ "=" ~ !"=" ~ expr }
+lambda      =  { "|" ~ lambda_args ~ "|" ~ expr }
+lambda_args =  { (ident ~ ("," ~ ident)*)? }
+
+or_op    = { "|" }
+and_op   = { "&" }
+xor_op   = { "^" }
+
+add_op   = { "+" | "-" }
+mul_op   = { "*" | "/" | "%" }
+pow_op   = { "**" }
+
+range_op = { "..=" | ".." }
+
+cmp_op   = { "==" | "!=" | "<=" | ">=" | "<" | ">" }
+
+or    =  { and   ~ (or_op  ~ and)* }
+and   =  { xor   ~ (and_op  ~ xor)* }
+xor   =  { cmp   ~ (xor_op  ~ cmp)* }
+cmp   =  { range ~ (cmp_op ~ range)? }
+range =  { add   ~ (range_op ~ add)? }
+add   =  { mul   ~ (add_op ~ mul)* }
+mul   =  { pow   ~ (mul_op ~ pow)* }
+pow   =  { unary ~ (pow_op ~ pow)? }
+
+unary   =  { ("-" | "!") ~ unary | postfix }
+postfix =  { primary ~ (call | index | method_call)* }
+
+call        = { "(" ~ arg_list ~ ")" }
+method_call = { "." ~ ident ~ "(" ~ arg_list ~ ")" }
+index       = { "[" ~ expr ~ "]" }
+arg_list    = _{ (expr ~ ("," ~ expr)*)? }
+
+primary =  { array | block | literal | ident | "(" ~ expr ~ ")" }
+array   =  { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
+block   =  { "{" ~ stmt* ~ expr? ~ "}" }
+
+if_       = { "if" ~ expr ~ block~ ("else" ~ block)? }
+while_    = { "while" ~ expr ~ block }
+for_      = { "for" ~ ident ~ "in" ~ expr ~ block }
+mod_      = { "mod" ~ expr ~ block }
+return_   = { "return" ~ expr? }
+break_    = { "break" }
+continue_ = { "continue" }

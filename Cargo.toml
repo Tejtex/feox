@@ -1,0 +1,10 @@
+[package]
+name = "feox"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ibig = "0.3.6"
+pest="2.8.6"
+pest_derive = "2.8.6"
+num-traits="0.2.19"
