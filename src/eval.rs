@@ -212,7 +212,7 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
         Expr::Ident(name) => EvalResult::Value(env.borrow().get(name).unwrap()),
         // Expr::UnaryOp {op, expr} => eval_unary_op(op, expr, env),
 
-        Expr::Range {start, end, inclusive} => eval_range(start, end, a *inclusive, env),
+        Expr::Range {start, end, inclusive} => eval_range(start, end, *inclusive, env),
         Expr::For {var, iter, body} => eval_for(var, iter, body, env),
         Expr::Continue => EvalResult::Continue,
         Expr::Break => EvalResult::Break,
