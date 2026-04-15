@@ -175,7 +175,8 @@ pub enum Value {
         body: Box<Expr>,
         env: EnvRef,
     },
-    Nil
+    Nil,
+    Range { start: i64, end: i64, inclusive: bool },
 }
 
 #[derive(Debug)]
@@ -210,6 +211,9 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
         Expr::Assign {name, value } => eval_assign(name, value, env),
         Expr::Ident(name) => EvalResult::Value(env.borrow().get(name).unwrap()),
         // Expr::UnaryOp {op, expr} => eval_unary_op(op, expr, env),
+
+        Expr::Range {start, end, inclusive} => eval_range(start, end, a *inclusive, env),
+        Expr::For {var, iter, body} => eval_for(var, iter, body, env),
         Expr::Continue => EvalResult::Continue,
         Expr::Break => EvalResult::Break,
         Expr::Return(v) => {
@@ -241,6 +245,60 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
         _ => panic!()
 
 
+    }
+}
+
+fn eval_for(var: &str, iter: &Box<Expr>, body: &Box<Expr>, mut env: EnvRef) -> EvalResult {
+    let iter = match eval(&**iter, env.clone()) {
+        EvalResult::Value(v) => v,
+        other => return other
+    };
+    
+    match iter {
+        Value::Range {start, end, inclusive} => {
+            let mut cur = start;
+            while cur < end + inclusive as i64 {
+                env.borrow_mut().set(var, Value::Number(cur));
+                match eval(&**body, env.clone()) {
+                    EvalResult::Break => break,
+                    EvalResult::Continue => continue,
+                    EvalResult::Value(_) => (),
+                    other => return other
+                };
+                
+                cur += 1;
+            }
+            EvalResult::Value(Value::Nil)
+        }
+        Value::Array(vals) => {
+            for val in vals {
+                env.borrow_mut().set(var, val);
+                match eval(&**body, env.clone()) {
+                    EvalResult::Break => break,
+                    EvalResult::Continue => continue,
+                    EvalResult::Value(_) => (),
+                    other => return other
+                };
+            }
+            EvalResult::Value(Value::Nil)
+        }
+        _ => panic!()
+    }
+}
+
+fn eval_range(start: &Box<Expr>, end: &Box<Expr>, inclusive: bool, env: EnvRef) -> EvalResult {
+    let start = match eval(&**start, env.clone()) {
+        EvalResult::Value(v) => v,
+        other => return other
+    };
+    let end = match eval(&**end, env) {
+        EvalResult::Value(v) => v,
+        other => return other
+    };
+    
+    match (start, end) {
+        (Value::Number(start), Value::Number(end)) => EvalResult::Value(Value::Range {start, end, inclusive }),
+        _ => panic!()
     }
 }
 
