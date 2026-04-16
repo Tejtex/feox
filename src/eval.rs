@@ -3,9 +3,8 @@ use num_traits::identities::Zero;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use ibig::IBig;
-use num_traits::{One, Pow};
 pub use crate::ast::{BinOp, Expr};
+use crate::ast::UnaryOp;
 
 impl Add for Value {
     type Output = Value;
@@ -110,39 +109,21 @@ impl PartialOrd for Value {
     }
 }
 
-// impl Pow<Value> for Value {
-//     type Output = Value;
-//     fn pow(self, rhs: Value) -> Value {
-//         match (self, rhs) {
-//             (Value::Number(mut a), Value::Number(mut b)) => {
-//                 let mut res = IBig::one();
-//
-//
-//                 while b > IBig::zero() {
-//                     if &b % 2 == 1 { res *= &a; }
-//                     a = &a * &a;
-//                     b /= 2;
-//                 }
-//                 Value::Number(res)
-//             },
-//             (a, b) => panic!("cannot pow {:?} and {:?}", a, b),
-//         }
-//     }
-// }
 type EnvRef = Rc<RefCell<Env>>;
 #[derive(Clone)]
 pub struct Env {
     vars: HashMap<String, Value>,
     parent: Option<EnvRef>,
+    modulus: Option<i64>
 }
 
 impl Env {
     pub fn new() -> Self {
-        Env { vars: HashMap::new(), parent: None }
+        Env { vars: HashMap::new(), parent: None, modulus: None }
     }
 
     pub fn child(parent: EnvRef) -> Self {
-        Env { vars: HashMap::new(), parent: Some(parent) }
+        Env { vars: HashMap::new(), parent: Some(parent.clone()), modulus: parent.borrow().modulus }
     }
 
     pub fn get(&self, name: &str) -> Option<Value> {
@@ -152,6 +133,95 @@ impl Env {
 
     pub fn set(&mut self, name: &str, val: Value) {
         self.vars.insert(name.to_string(), val);
+    }
+
+    pub fn set_modulus(&mut self, modulus: i64) {
+        self.modulus = Some(modulus);
+    }
+
+    pub fn reset_modulus(&mut self) {
+        self.modulus = None;
+    }
+
+    pub fn add(&self, lhs: i64,  rhs: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(self.modded(lhs + rhs)))
+    }
+
+    pub fn mul(&self, lhs: i64, rhs: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(self.modded(lhs * rhs)))
+    }
+
+    pub fn sub(&self, lhs: i64, rhs: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(self.modded(lhs - rhs)))
+    }
+
+    pub fn rem(&self, lhs: i64, rhs: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(self.modded(((lhs % rhs) + rhs) % rhs)))
+    }
+
+    pub fn xor(&self, lhs: i64, rhs: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(self.modded(lhs ^ rhs)))
+    }
+
+    pub fn and(&self, lhs: i64, rhs: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(self.modded(lhs & rhs)))
+    }
+
+    pub fn or(&self, lhs: i64, rhs: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(self.modded(lhs | rhs)))
+    }
+
+    pub fn pow(&self, mut lhs: i64, mut rhs: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(if let Some(modulus) = self.modulus {
+            let mut res = 1;
+
+            while rhs >= 1 {
+                if rhs % 2 == 1 {res *= lhs}
+                lhs *= lhs;
+                res %= modulus;
+                lhs %= modulus;
+                rhs /= 2;
+            }
+            res
+        } else {
+            let mut res = 1;
+
+            while rhs >= 1 {
+                if rhs % 2 == 1 {res *= lhs}
+                lhs *= lhs;
+                rhs /= 2;
+            }
+            res
+        }))
+    }
+
+    pub fn div(&self,  lhs: i64, rhs: i64) -> EvalResult {
+        if let Some(modulus) = self.modulus {
+            let rhs = match self.pow(rhs, modulus - 2) {
+                EvalResult::Value(Value::Number(v)) => v,
+                _ => panic!()
+            };
+
+            self.mul(rhs, lhs)
+        } else {
+            EvalResult::Value(Value::Number(lhs / rhs))
+        }
+    }
+    
+    pub fn modded(&self, num: i64) -> i64 {
+        if let Some(modulus) = self.modulus {
+            ((num % modulus )+ modulus) % modulus
+        } else {
+            num
+        }
+    }
+    
+    pub fn neg(&self, num: i64) -> EvalResult {
+        EvalResult::Value(Value::Number(self.modded(-num)))
+    }
+    
+    pub fn not(&self, num: i64) -> EvalResult {
+        EvalResult::Value(Value::Number((num == 0) as i64))
     }
 }
 impl std::fmt::Debug for Env {
@@ -190,7 +260,7 @@ pub enum EvalResult {
 
 pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
     match expr {
-        Expr::Number(n) => EvalResult::Value(Value::Number(n.clone())),
+        Expr::Number(n) => EvalResult::Value(Value::Number(env.borrow().modded(n.clone()))),
         Expr::String(s) => EvalResult::Value(Value::String(s.to_string())),
         Expr::Bool(b) => EvalResult::Value(Value::Bool(*b)),
         Expr::Nil => EvalResult::Value(Value::Nil),
@@ -210,7 +280,9 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
         Expr::BinOp {op, left, right} => eval_bin_op(op, left, right, env),
         Expr::Assign {name, value } => eval_assign(name, value, env),
         Expr::Ident(name) => EvalResult::Value(env.borrow().get(name).unwrap()),
-        // Expr::UnaryOp {op, expr} => eval_unary_op(op, expr, env),
+        Expr::UnaryOp {op, expr} => eval_unary_op(op, expr, env),
+
+        Expr::Mod {modulus, body} => eval_mod(modulus, body, env),
 
         Expr::Range {start, end, inclusive} => eval_range(start, end, *inclusive, env),
         Expr::For {var, iter, body} => eval_for(var, iter, body, env),
@@ -248,7 +320,24 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
     }
 }
 
-fn eval_for(var: &str, iter: &Box<Expr>, body: &Box<Expr>, mut env: EnvRef) -> EvalResult {
+fn eval_mod(modulus: &Box<Expr>, body: &Box<Expr>, env: EnvRef) -> EvalResult {
+    let modulus = match eval(&**modulus, env.clone()) {
+        EvalResult::Value(v) => v,
+        other => return other
+    };
+
+    let modulus = match modulus {
+        Value::Number(n) => n,
+        _ => panic!()
+    };
+    env.borrow_mut().set_modulus(modulus);
+
+    let res = eval(&**body, env.clone());
+    env.borrow_mut().reset_modulus();
+    res
+}
+
+fn eval_for(var: &str, iter: &Box<Expr>, body: &Box<Expr>, env: EnvRef) -> EvalResult {
     let iter = match eval(&**iter, env.clone()) {
         EvalResult::Value(v) => v,
         other => return other
@@ -358,18 +447,22 @@ fn eval_call(args: &Vec<Expr>, func: &Box<Expr>, env: EnvRef) -> EvalResult {
     }
 }
 
-// fn eval_unary_op(op: &UnaryOp, expr: &Box<Expr>, env: EnvRef) -> EvalResult {
-//     let val = eval(&**expr, env);
-//     if let EvalResult::Value(val) = val {
-//         match op {
-//             UnaryOp::Neg => -val,
-//             UnaryOp::Not => !val,
-//         }
-//     } else {
-//         val
-//     }
-//
-// }
+fn eval_unary_op(op: &UnaryOp, expr: &Box<Expr>, env: EnvRef) -> EvalResult {
+    let val = eval(&**expr, env.clone());
+    if let EvalResult::Value(val) = val {
+        let val = match val {
+            Value::Number(n) => n,
+            _ => panic!()
+        };
+        match op {
+            UnaryOp::Neg => env.borrow().neg(val),
+            UnaryOp::Not => env.borrow().not(val),
+        }
+    } else {
+        val
+    }
+
+}
 
 fn eval_assign(name: &str, value: &Box<Expr>, env: EnvRef) -> EvalResult {
     let value = eval(&**value, env.clone());
@@ -393,26 +486,31 @@ fn is_true(val: &Value) -> bool {
 fn eval_bin_op(op: &BinOp, left: &Box<Expr>, right: &Box<Expr>, env: EnvRef) -> EvalResult {
     let left = eval(&**left, env.clone());
     if let EvalResult::Value(left) = left {
-        let right = eval(&**right, env);
+        let right = eval(&**right, env.clone());
         if let EvalResult::Value(right) = right {
-            EvalResult::Value(match op {
-                BinOp::Add => left + right,
-                BinOp::Sub => left - right,
-                BinOp::Mul => left * right,
-                BinOp::Div => left / right,
-                BinOp::Rem => left % right,
-                BinOp::Eq => Value::Bool(left == right),
-                BinOp::Neq => Value::Bool(left != right),
-                BinOp::Lt => Value::Bool(left < right),
-                BinOp::Gt => Value::Bool(left > right),
-                BinOp::Le => Value::Bool(left <= right),
-                BinOp::Ge => Value::Bool(left >= right),
-                BinOp::Xor => left ^ right,
-                BinOp::And => left & right,
-                BinOp::Or => left | right,
-                // BinOp::Pow => left.pow(right)
+            let env = env.borrow();
+            let (left, right) = match (left, right) {
+                (Value::Number(left),  Value::Number(right)) => (env.modded(left), env.modded(right)),
                 _ => panic!()
-            })
+            };
+
+            match op {
+                BinOp::Add => env.add(left, right),
+                BinOp::Sub => env.sub(left, right),
+                BinOp::Mul => env.mul(left, right),
+                BinOp::Div => env.div(left, right),
+                BinOp::Rem => env.rem(left, right),
+                BinOp::Xor => env.xor(left, right),
+                BinOp::And => env.and(left, right),
+                BinOp::Or =>  env.or(left, right),
+                BinOp::Pow => env.pow(left, right),
+                BinOp::Eq =>  EvalResult::Value(Value::Bool(left == right)),
+                BinOp::Neq => EvalResult::Value(Value::Bool(left != right)),
+                BinOp::Lt =>  EvalResult::Value(Value::Bool(left < right)),
+                BinOp::Gt =>  EvalResult::Value(Value::Bool(left > right)),
+                BinOp::Le =>  EvalResult::Value(Value::Bool(left <= right)),
+                BinOp::Ge =>  EvalResult::Value(Value::Bool(left >= right)),
+            }
             
         } else {
             right
