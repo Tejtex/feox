@@ -413,7 +413,11 @@ fn eval_for(var: &str, iter: &Box<Expr>, body: &Box<Expr>, env: EnvRef) -> EvalR
         } if args.is_empty() => {
             loop {
                 let new_env = Rc::new(RefCell::new(Env::child(iter_env.clone())));
-                let val = eval(&iter_body, new_env)?;
+                let val = match eval(&iter_body, new_env) {
+                    Ok(v) => v,
+                    Err(EvalError::Return(v)) => v.unwrap_or(Value::Nil),
+                    other => return other
+                };
                 if val == Value::Nil {break}
                 env.borrow_mut().set(var.to_string(), val);
                 match eval(&**body, env.clone()) {
