@@ -20,8 +20,11 @@ impl PartialEq for Value {
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
+            (Value::Nil, _) => Some(std::cmp::Ordering::Equal),
+            (_, Value::Nil) => Some(std::cmp::Ordering::Equal),
             (Value::Number(a), Value::Number(b)) => a.partial_cmp(b),
             (Value::String(a), Value::String(b)) => a.partial_cmp(b),
+            (Value::Array(a), Value::Array(b)) => a.partial_cmp(b),
             _ => None,
         }
     }
@@ -30,7 +33,7 @@ impl PartialOrd for Value {
 type EnvRef = Rc<RefCell<Env>>;
 #[derive(Clone)]
 pub struct Env {
-    vars: Vec<(Value, String)>,
+    vars: HashMap<String, Value>,
     parent: Option<EnvRef>,
     modulus: Option<i64>,
 }
@@ -38,7 +41,7 @@ pub struct Env {
 impl Env {
     pub fn new() -> Self {
         Env {
-            vars: Vec::new(),
+            vars: HashMap::new(),
             parent: None,
             modulus: None,
         }
@@ -46,27 +49,32 @@ impl Env {
 
     pub fn child(parent: EnvRef) -> Self {
         Env {
-            vars: Vec::new(),
+            vars: HashMap::new(),
             parent: Some(parent.clone()),
             modulus: parent.borrow().modulus,
         }
     }
 
-    pub fn get(&self, id: usize) -> Option<Value> {
-        if self.vars.len() <= id || self.vars[id].0 == Value::Uninit {
-            self.parent.as_ref()?.borrow().get(id)
-        } else {
-            Some(self.vars[id].0.clone())
-        }
+    pub fn get(&self, name: &str) -> Option<Value> {
+        self.vars.get(name).cloned()
+            .or_else(|| self.parent.as_ref()?.borrow().get(name))
     }
 
-    pub fn set(&mut self, name: &str, id: usize, val: Value) {
-        if self.vars.len() >= id {
-            self.vars.resize(id + 1, (Value::Uninit, String::new()));
-        }
+    pub fn set(&mut self, name: String, val: Value) {
+        self.vars.insert(name, val);
+    }
 
-        self.vars[id].1 = name.to_string();
-        self.vars[id].0 = val;
+    pub fn modify(&mut self, name: String, val: Value) -> EvalResult {
+        if self.vars.contains_key(&name) {
+            self.vars.insert(name, val.clone());
+            Ok(val)
+        } else {
+            if let Some(p) = &self.parent {
+                p.borrow_mut().modify(name, val)
+            } else {
+                Err(EvalError::UndefinedVariable(name))
+            }
+        }
     }
 
     pub fn set_modulus(&mut self, modulus: i64) {
@@ -264,7 +272,7 @@ pub enum Value {
     Array(Vec<Value>),
     Object(HashMap<String, Value>),
     Lambda {
-        args: Vec<(usize, String)>,
+        args: Vec<String>,
         body: Box<Expr>,
         env: EnvRef,
     },
@@ -321,10 +329,11 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
         }
         Expr::If { cond, then, else_ } => eval_if(cond, then, else_, env),
         Expr::BinOp { op, left, right } => eval_bin_op(op, left, right, env),
-        Expr::Assign { name, value, id } => eval_assign(name, value, *id, env),
-        Expr::Ident(id, name) => env
+        Expr::Assign { name, value } => eval_assign(name, value, env),
+        Expr::Declare {name, value } => eval_declare(name, value, env),
+        Expr::Ident(name) => env
             .borrow()
-            .get(*id)
+            .get(name)
             .ok_or(EvalError::UndefinedVariable(name.to_string())),
         Expr::UnaryOp { op, expr } => eval_unary_op(op, expr, env),
 
@@ -334,13 +343,22 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
             start,
             end,
             inclusive,
-        } => eval_range(start, end, *inclusive, env),
+        } => {
+            let mut end = end.clone();
+            if *inclusive {
+                end = Box::new(Expr::BinOp {
+                    op:BinOp::Add,
+                    left: Box::new(Expr::Number(1)),
+                    right: end.clone()
+                });
+            }
+            eval_call(&vec![*start.clone(), *end], &Box::new(Expr::Ident("range".to_string())), env)
+        }
         Expr::For {
             var,
             iter,
             body,
-            id,
-        } => eval_for(var, iter, body, *id, env),
+        } => eval_for(var, iter, body, env),
         Expr::Continue => Err(EvalError::Continue),
         Expr::Break => Err(EvalError::Break),
         Expr::Return(v) => {
@@ -384,56 +402,30 @@ fn eval_mod(modulus: &Box<Expr>, body: &Box<Expr>, env: EnvRef) -> EvalResult {
     res
 }
 
-fn eval_for(var: &str, iter: &Box<Expr>, body: &Box<Expr>, id: usize, env: EnvRef) -> EvalResult {
+fn eval_for(var: &str, iter: &Box<Expr>, body: &Box<Expr>, env: EnvRef) -> EvalResult {
     let iter = eval(&**iter, env.clone())?;
 
     match iter {
-        Value::Range {
-            start,
-            end,
-            inclusive,
-        } => {
-            let mut cur = start;
-            while cur < end + inclusive as i64 {
-                env.borrow_mut().set(var, id, Value::Number(cur));
+        Value::Lambda {
+            args,
+            body: iter_body,
+            env: iter_env
+        } if args.is_empty() => {
+            loop {
+                let new_env = Rc::new(RefCell::new(Env::child(iter_env.clone())));
+                let val = eval(&iter_body, new_env)?;
+                if val == Value::Nil {break}
+                env.borrow_mut().set(var.to_string(), val);
                 match eval(&**body, env.clone()) {
                     Err(EvalError::Break) => break,
                     Err(EvalError::Continue) => continue,
                     Ok(_) => (),
-                    other => return other,
-                };
-
-                cur += 1;
+                    other => return other
+                }
             }
             Ok(Value::Nil)
         }
-        Value::Array(vals) => {
-            for val in vals {
-                env.borrow_mut().set(var, id, val);
-                match eval(&**body, env.clone()) {
-                    Err(EvalError::Break) => break,
-                    Err(EvalError::Continue) => continue,
-                    Ok(_) => (),
-                    other => return other,
-                };
-            }
-            Ok(Value::Nil)
-        }
-        _ => Err(EvalError::TypeError("iter has to be an array/range")),
-    }
-}
-
-fn eval_range(start: &Box<Expr>, end: &Box<Expr>, inclusive: bool, env: EnvRef) -> EvalResult {
-    let start = eval(&**start, env.clone())?;
-    let end = eval(&**end, env)?;
-
-    match (start, end) {
-        (Value::Number(start), Value::Number(end)) => Ok(Value::Range {
-            start,
-            end,
-            inclusive,
-        }),
-        _ => Err(EvalError::TypeError("start and end have to be a number")),
+        _ => Err(EvalError::TypeError("for only works on iterators")),
     }
 }
 
@@ -441,7 +433,6 @@ fn eval_while(cond: &Box<Expr>, body: &Box<Expr>, env: EnvRef) -> EvalResult {
     let mut val = eval(&**cond, env.clone())?;
 
     while is_true(&val) {
-        val = eval(&**cond, env.clone())?;
 
         match eval(&**body, env.clone()) {
             Ok(v) => v,
@@ -449,9 +440,11 @@ fn eval_while(cond: &Box<Expr>, body: &Box<Expr>, env: EnvRef) -> EvalResult {
             Err(EvalError::Break) => break,
             other => return other,
         };
+        val = eval(&**cond, env.clone())?;
     }
     Ok(Value::Nil)
 }
+
 
 fn eval_call(args: &Vec<Expr>, func: &Box<Expr>, env: EnvRef) -> EvalResult {
     let func = match eval(&**func, env.clone()) {
@@ -476,7 +469,7 @@ fn eval_call(args: &Vec<Expr>, func: &Box<Expr>, env: EnvRef) -> EvalResult {
             Ok(v) => v,
             other => return other,
         };
-        new_env.borrow_mut().set(&name.1, name.0, val);
+        new_env.borrow_mut().set(name, val);
     }
 
     let res = eval(&*func.1, new_env);
@@ -500,11 +493,22 @@ fn eval_unary_op(op: &UnaryOp, expr: &Box<Expr>, env: EnvRef) -> EvalResult {
     }
 }
 
-fn eval_assign(name: &str, value: &Box<Expr>, id: usize, env: EnvRef) -> EvalResult {
+fn eval_declare(name: &str, value: &Box<Expr>, env: EnvRef) -> EvalResult {
     let value = eval(&**value, env.clone());
     match value {
         Ok(v) => {
-            env.borrow_mut().set(name, id, v.clone());
+            env.borrow_mut().set(name.to_string(), v.clone());
+            Ok(v)
+        }
+        o => o,
+    }
+}
+
+fn eval_assign(name: &str, value: &Box<Expr>, env: EnvRef) -> EvalResult {
+    let value = eval(&**value, env.clone());
+    match value {
+        Ok(v) => {
+            env.borrow_mut().modify(name.to_string(), v.clone())?;
             Ok(v)
         }
         o => o,
