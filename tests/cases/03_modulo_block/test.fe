@@ -1,8 +1,3 @@
-mod 1e9+9 {
-    for x in (1..1e9+8) {
-        if x*x == 56480 {
-            print(x);
-            break;
-        };
-    };
-};  
+mod 1e9 + 9 {
+    print((1..=1e9).filter(|x| x * x == 56480).first());
+};
