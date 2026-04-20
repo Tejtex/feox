@@ -45,6 +45,23 @@ let first = |iter| {
     iter();
 };
 
+let take = |iter, n| {
+    let i = 0;
+    || {
+        if i >= n {
+            return nil;
+        };
+
+        let v = iter();
+        if v == nil {
+            return nil;
+        };
+
+        i = i + 1;
+        v
+    }
+};
+
 let any = |iter| {
     let v = nil;
     while (v = iter()) != nil {
