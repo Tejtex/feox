@@ -1,0 +1,1 @@
+print((1..10).fold(|x, acc| x * acc, 1));
