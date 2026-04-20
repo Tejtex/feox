@@ -88,17 +88,12 @@ fn repl(env: &Rc<RefCell<Env>>) {
 
 fn main() {
     let env = Rc::new(RefCell::new(Env::new()));
-    const STDLIB: &str = r#"
-        let range = |start, end| { let i = start; || { if i >= end { nil } else { i = i + 1; i - 1 } } };
-        let map = |iter, f| || { let v = iter(); if v == nil { nil } else { f(v) } };
-        let filter = |iter, f| || { let cur = nil; while ((cur = iter()) != nil){if f(cur) {return cur}} };
-        let collect = |iter| { let arr = []; let v = nil; while (v = iter()) != nil { arr = arr + v }; arr };
-        let sum = |iter| {let acc = 0; for el in iter { acc = acc + el; }; acc};
-        let max = |iter| {let maxi = nil; for el in iter { if el >= maxi {maxi = el} }; maxi };
-        let min = |iter| {let mini = nil; for el in iter { if el <= mini {mini = el} }; mini };
-    "#;
+    const STDLIB: &str = include_str!("../stdlib.fe");
 
-    let ast = parser::parse(STDLIB).expect("stdlib should parse");
+    let ast = match parser::parse(STDLIB){
+        Ok(ast) => ast,
+        Err(e) => panic!("{}", e)
+    };
     eval::eval(&Expr::Block(ast), env.clone()).expect("stdlib should eval");
 
 

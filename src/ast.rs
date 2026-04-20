@@ -21,6 +21,7 @@ pub enum Expr {
 
     Assign {
         name: String,
+        indices: Vec<Expr>,
         value: Box<Expr>,
     },
     
@@ -91,6 +92,21 @@ pub enum Expr {
         object: Box<Expr>,
         index: Box<Expr>,
     },
+    
+    Len(Box<Expr>),
+    
+    LogicalOp {
+        left: Box<Expr>,
+        right: Box<Expr>,
+        op: LogicalOp
+    }
+}
+
+#[derive(Clone)]
+#[derive(Debug)]
+pub enum LogicalOp {
+    And,
+    Or
 }
 
 #[derive(Debug, Clone)]

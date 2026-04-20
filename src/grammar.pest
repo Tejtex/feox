@@ -10,18 +10,21 @@ integer = _{ bignum | number }
 literal = _{ integer | string | bool | nil }
 
 keyword = _{ "true" | "false" | "nil" | "if" | "else" | "while" | "for" | "in" | "mod" | "return" | "break" | "continue" | "let" }
-ident   = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+ident   = @{ !(keyword ~ !((ASCII_ALPHANUMERIC | "_")))~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 program = _{ SOI ~ stmt* ~ EOI }
 stmt    = _{ expr ~ (";" | NEWLINE+) }
 
 expr    = _{ assign | lambda | if_ | while_ | for_ | mod_
-           | return_ | break_ | continue_ | or | declare }
+           | return_ | break_ | continue_ | logical_or | declare }
 
-assign      =  { ident ~ "=" ~ !"=" ~ expr }
+assign      =  { ident ~ index* ~ "=" ~ !"=" ~ expr }
 declare     =  { "let" ~ ident ~ "=" ~ !"=" ~ expr }
 lambda      =  { "|" ~ lambda_args ~ "|" ~ expr }
 lambda_args =  { (ident ~ ("," ~ ident)*)? }
+
+logical_and_op = {"&&"}
+logical_or_op = {"||"}
 
 or_op    = { "|" }
 and_op   = { "&" }
@@ -35,6 +38,8 @@ range_op = { "..=" | ".." }
 
 cmp_op   = { "==" | "!=" | "<=" | ">=" | "<" | ">" }
 
+logical_or  = { logical_and ~ (logical_or_op ~ logical_and)*}
+logical_and = { or ~ (logical_and_op ~ or)* }
 or    =  { and   ~ (or_op  ~ and)* }
 and   =  { xor   ~ (and_op  ~ xor)* }
 xor   =  { cmp   ~ (xor_op  ~ cmp)* }
@@ -52,7 +57,7 @@ method_call = { "." ~ ident ~ "(" ~ arg_list ~ ")" }
 index       = { "[" ~ expr ~ "]" }
 arg_list    = _{ (expr ~ ("," ~ expr)*)? }
 
-primary =  { array | block | literal | ident | "(" ~ expr ~ ")" }
+primary =  { len | array | block | literal | ident | "(" ~ expr ~ ")" }
 array   =  { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
 block   =  { "{" ~ stmt* ~ expr? ~ "}" }
 
@@ -63,3 +68,4 @@ mod_      = { "mod" ~ expr ~ block }
 return_   = { "return" ~ expr? }
 break_    = { "break" }
 continue_ = { "continue" }
+len      = { "len" ~ "(" ~ expr ~ ")" }

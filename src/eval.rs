@@ -1,4 +1,4 @@
-use crate::ast::UnaryOp;
+use crate::ast::{LogicalOp, UnaryOp};
 pub use crate::ast::{BinOp, Expr};
 use num_traits::identities::Zero;
 use std::cell::RefCell;
@@ -35,7 +35,7 @@ type EnvRef = Rc<RefCell<Env>>;
 pub struct Env {
     vars: HashMap<String, Value>,
     parent: Option<EnvRef>,
-    modulus: Option<i64>,
+    modulus: Vec<i64>
 }
 
 impl Env {
@@ -43,7 +43,7 @@ impl Env {
         Env {
             vars: HashMap::new(),
             parent: None,
-            modulus: None,
+            modulus: vec![],
         }
     }
 
@@ -51,7 +51,7 @@ impl Env {
         Env {
             vars: HashMap::new(),
             parent: Some(parent.clone()),
-            modulus: parent.borrow().modulus,
+            modulus: parent.borrow().modulus.clone(),
         }
     }
 
@@ -64,13 +64,27 @@ impl Env {
         self.vars.insert(name, val);
     }
 
-    pub fn modify(&mut self, name: String, val: Value) -> EvalResult {
+    pub fn modify(&mut self, name: String, indices: Vec<Value>, to_set: Value) -> EvalResult {
         if self.vars.contains_key(&name) {
-            self.vars.insert(name, val.clone());
-            Ok(val)
+            let mut val =  self.vars.get_mut(&name).unwrap();
+            for idx in indices {
+                let idx = match idx {
+                    Value::Number(x) => x,
+                    _ => return Err(EvalError::TypeError("index has to be a number"))
+                };
+
+                let vals = match val {
+                    Value::Array(x) => x,
+                    _ => return Err(EvalError::TypeError("cannot index into non-array"))
+                };
+                val = vals.get_mut(idx as usize)
+                    .ok_or(EvalError::IndexError)?;
+            }
+            *val = to_set;
+            Ok(val.clone())
         } else {
             if let Some(p) = &self.parent {
-                p.borrow_mut().modify(name, val)
+                p.borrow_mut().modify(name, indices, to_set)
             } else {
                 Err(EvalError::UndefinedVariable(name))
             }
@@ -78,22 +92,17 @@ impl Env {
     }
 
     pub fn set_modulus(&mut self, modulus: i64) {
-        self.modulus = Some(modulus);
+        self.modulus.push(modulus);
     }
 
     pub fn reset_modulus(&mut self) {
-        self.modulus = None;
+        self.modulus.pop();
     }
 
     pub fn add(&self, lhs: Value, rhs: Value) -> EvalResult {
         match (lhs, rhs) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Number(self.modded(a + b))),
             (Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
-
-            (Value::Array(mut a), Value::Array(mut b)) => {
-                a.append(&mut b);
-                Ok(Value::Array(a))
-            }
             (Value::Array(mut a), b) => {
                 a.push(b);
                 Ok(Value::Array(a))
@@ -173,7 +182,7 @@ impl Env {
     pub fn pow(&self, lhs: Value, rhs: Value) -> EvalResult {
         match (lhs, rhs) {
             (Value::Number(mut lhs), Value::Number(mut rhs)) => {
-                Ok(Value::Number(if let Some(modulus) = self.modulus {
+                Ok(Value::Number(if let Some(modulus) = (&self.modulus).last() {
                     let mut res = 1;
 
                     while rhs >= 1 {
@@ -207,7 +216,7 @@ impl Env {
     pub fn div(&self, lhs: Value, rhs: Value) -> EvalResult {
         match (&lhs, &rhs) {
             (&Value::Number(a), &Value::Number(b)) => {
-                if let Some(modulus) = self.modulus {
+                if let Some(modulus) =( &self.modulus).last() {
                     let rhs = match self.pow(rhs, Value::Number(modulus - 2)) {
                         Ok(v) => v,
                         other => return other,
@@ -224,7 +233,7 @@ impl Env {
     }
 
     pub fn modded(&self, num: i64) -> i64 {
-        if let Some(modulus) = self.modulus {
+        if let Some(modulus) = (&self.modulus).last() {
             ((num % modulus) + modulus) % modulus
         } else {
             num
@@ -251,6 +260,8 @@ impl std::fmt::Debug for Env {
 pub enum EvalError {
     #[error("type error: {0}")]
     TypeError(&'static str),
+    #[error("index out of range")]
+    IndexError,
     #[error("wrong number of args: {0}")]
     WrongNumberOfArgs(String),
     #[error("undefined variable: {0}")]
@@ -311,6 +322,43 @@ type EvalResult = Result<Value, EvalError>;
 
 pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
     match expr {
+        Expr::Len(obj) => {
+            let obj = eval(&**obj, env.clone())?;
+
+            match obj {
+                Value::Array(a) => Ok(Value::Number(a.len() as i64)),
+                _ => Err(EvalError::TypeError("argument of len has to be an array"))
+            }
+        }
+        Expr::LogicalOp {
+            left, right, op
+        } => {
+            match *op {
+                LogicalOp::Or => {
+                    let left = eval(&**left, env.clone())?;
+                    if is_true(&left) {
+                        return Ok(Value::Number(1))
+                    }
+                    let right = eval(&**right, env)?;
+                    if is_true(&right) {
+                        return Ok(Value::Number(1))
+                    }
+                    return Ok(Value::Number(0))
+                }
+                LogicalOp::And => {
+
+                    let left = eval(&**left, env.clone())?;
+                    if !is_true(&left) {
+                        return Ok(Value::Number(0))
+                    }
+                    let right = eval(&**right, env)?;
+                    if !is_true(&right) {
+                        return Ok(Value::Number(0))
+                    }
+                    return Ok(Value::Number(1))
+                }
+            }
+        }
         Expr::Number(n) => Ok(Value::Number(env.borrow().modded(n.clone()))),
         Expr::String(s) => Ok(Value::String(s.to_string())),
         Expr::Bool(b) => Ok(Value::Number(*b as i64)),
@@ -329,13 +377,28 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
         }
         Expr::If { cond, then, else_ } => eval_if(cond, then, else_, env),
         Expr::BinOp { op, left, right } => eval_bin_op(op, left, right, env),
-        Expr::Assign { name, value } => eval_assign(name, value, env),
+        Expr::Assign { name, value , indices} => eval_assign(name, value, indices, env),
         Expr::Declare {name, value } => eval_declare(name, value, env),
         Expr::Ident(name) => env
             .borrow()
             .get(name)
             .ok_or(EvalError::UndefinedVariable(name.to_string())),
         Expr::UnaryOp { op, expr } => eval_unary_op(op, expr, env),
+        Expr::Index {index, object} => {
+            let index = match eval(index, env.clone())? {
+                Value::Number(x) => x,
+                _ => return Err(EvalError::TypeError("index has to be a number")),
+            };
+
+            let object = match eval(object, env.clone())? {
+                Value::Array(a) => a,
+                _ => return Err(EvalError::TypeError("cannot index into non-array")),
+            };
+
+            Ok(object.get(index as usize)
+                .ok_or(EvalError::IndexError)?.clone())
+
+        }
 
         Expr::Mod { modulus, body } => eval_mod(modulus, body, env),
 
@@ -384,7 +447,6 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
             }
             Ok(last)
         }
-        _ => unreachable!("unhandled expr type"),
     }
 }
 
@@ -508,11 +570,12 @@ fn eval_declare(name: &str, value: &Box<Expr>, env: EnvRef) -> EvalResult {
     }
 }
 
-fn eval_assign(name: &str, value: &Box<Expr>, env: EnvRef) -> EvalResult {
+fn eval_assign(name: &str, value: &Box<Expr>, indices: &Vec<Expr>, env: EnvRef) -> EvalResult {
     let value = eval(&**value, env.clone());
+    let indices = indices.into_iter().map(|x| eval(x, env.clone())).collect::<Result<Vec<_>, _>>()?;
     match value {
         Ok(v) => {
-            env.borrow_mut().modify(name.to_string(), v.clone())?;
+            env.borrow_mut().modify(name.to_string(), indices, v.clone())?;
             Ok(v)
         }
         o => o,

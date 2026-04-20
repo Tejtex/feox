@@ -1,7 +1,9 @@
-use crate::ast::{BinOp, Expr, UnaryOp};
-use pest::Parser;
+use std::error::Error;
+use crate::ast::{BinOp, Expr, LogicalOp, UnaryOp};
+use pest::{Parser};
 use pest::iterators::{Pair, Pairs};
 use pest_derive::Parser;
+
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 struct FeoxParser;
@@ -31,8 +33,8 @@ struct FeoxParser;
 //     }
 // }
 
-pub fn parse(source: &str) -> Result<Vec<Expr>, String> {
-    let pairs = FeoxParser::parse(Rule::program, source).map_err(|_| "parse error".to_string())?;
+pub fn parse(source: &str) -> Result<Vec<Expr>, Box<dyn Error>> {
+    let pairs = FeoxParser::parse(Rule::program, source)?;
     Ok(parse_program(pairs))
 }
 
@@ -55,6 +57,9 @@ fn parse_expr(pair: Pair<Rule>) -> Expr {
         Rule::return_ => parse_return(pair),
         Rule::break_ => Expr::Break,
         Rule::continue_ => Expr::Continue,
+
+        Rule::logical_and
+        | Rule::logical_or => parse_logical_chain(pair),
 
         Rule::or
         | Rule::and
@@ -151,12 +156,44 @@ fn parse_assign(pair: Pair<Rule>) -> Expr {
     let mut inner = pair.into_inner();
 
     let name = inner.next().unwrap().as_str().to_string();
-    let value = parse_expr(inner.next().unwrap());
+
+    let mut indices = Vec::new();
+    let mut value = Expr::Nil;
+    for p in inner {
+        match p.as_rule() {
+            Rule::index => indices.push(parse_expr(p.into_inner().next().unwrap())),
+            _ => value = parse_expr(p),
+        }
+    }
 
     Expr::Assign {
         name,
+        indices,
         value: Box::new(value),
     }
+}
+
+
+fn parse_logical_chain(pair: Pair<Rule>) -> Expr {
+    let mut inner = pair.into_inner();
+
+    let mut expr = parse_expr(inner.next().unwrap());
+
+    while let Some(op) = inner.next() {
+        let rhs = parse_expr(inner.next().unwrap());
+            expr = Expr::LogicalOp {
+                op: match op.as_str() {
+                    "&&" => LogicalOp::And,
+                    "||" => LogicalOp::Or,
+                    _ => unreachable!("{}", op.as_str()),
+                },
+                left: Box::new(expr),
+                right: Box::new(rhs),
+
+        }
+    }
+
+    expr
 }
 
 fn parse_binary_chain(pair: Pair<Rule>) -> Expr {
@@ -254,6 +291,9 @@ fn parse_primary(pair: Pair<Rule>) -> Expr {
                 * base.parse::<i64>().unwrap();
             Expr::Number(n)
         }
+        Rule::len =>
+            Expr::Len(Box::new(parse_expr(inner.into_inner().next().unwrap()))),
+
 
         _ => parse_expr(inner),
     }

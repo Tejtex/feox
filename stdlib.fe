@@ -1,0 +1,150 @@
+let range = |start, end| {
+    let i = start;
+    || {
+        if i >= end {
+            nil
+        } else {
+            i = i + 1;
+            i - 1
+        }
+    }
+};
+
+let map = |iter, f|
+    || {
+        let v = iter();
+        if v == nil { nil } else { f(v) }
+    };
+
+let filter = |iter, f|
+    || {
+        let cur = nil;
+        while ((cur = iter()) != nil) {
+            if f(cur) {return cur}
+        }
+    };
+
+let collect = |iter| {
+    let arr = [];
+    let v = nil;
+    while (v = iter()) != nil {
+        arr = arr + v
+    };
+    arr
+};
+
+let sum = |iter| {
+    let acc = 0;
+    for el in iter {
+        acc = acc + el;
+    };
+    acc
+};
+
+let max = |iter| {
+    let maxi = nil;
+    for el in iter {
+        if el >= maxi {
+            maxi = el
+        }
+    };
+    maxi
+};
+
+let min = |iter| {
+    let mini = nil;
+    for el in iter {
+        if el <= mini {
+            mini = el
+        }
+    };
+    mini
+};
+
+let windows = |iter, num| {
+    let i = 0;
+    let arr = [];
+    || {
+        if i == 0 {
+
+            for j in (i..(i+num)) {
+                let el = iter();
+                if el == nil {
+                    break;
+                };
+                arr = arr + el;
+            };
+            if j != (i + num - 1) {return nil};
+        } else {
+            let newarr = [];
+            for j in (1..len(arr)) {
+                newarr = newarr + arr[j];
+            };
+            if (let res = iter()) == nil {return nil};
+            newarr = newarr + res;
+            arr = newarr;
+        };
+        i = i + 1;
+        arr
+    }
+};
+
+let into_iter = |arr| {
+    let i = 0;
+    || {
+        i = i + 1;
+        if i > len(arr) {
+            return nil;
+        } else {
+            return arr[i - 1];
+        };
+    }
+};
+
+let perms = |arr| {
+
+    let a = arr;
+    let first = true;
+
+    || {
+
+        if first {
+            first = false;
+            return a
+        };
+
+        let i = len(a) - 2;
+
+        while i >= 0 && a[i] >= a[i+1] {
+            i = i - 1
+        };
+
+        if i < 0 {
+            return nil
+        };
+
+        let j = len(a) - 1;
+
+        while a[j] <= a[i] {
+            j = j - 1
+        };
+
+        let tmp = a[i];
+        a[i] = a[j];
+        a[j] = tmp;
+
+        let l = i + 1;
+        let r = len(a) - 1;
+
+        while l < r {
+            let tmp = a[l];
+            a[l] = a[r];
+            a[r] = tmp;
+
+            l = l + 1;
+            r = r - 1;
+        };
+
+        a
+    }
+};
