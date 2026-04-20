@@ -33,6 +33,14 @@ let collect = |iter| {
     arr
 };
 
+let fold = |iter, f, acc| {
+    let v = nil;
+    while (v = iter()) != nil {
+        acc = f(acc, v);
+    };
+    acc;
+};
+
 let any = |iter| {
     let v = nil;
     while (v = iter()) != nil {
@@ -192,4 +200,12 @@ let abs = |a| {
     } else {
         -a
     };
+};
+
+let fact = |n| {
+    if n < 0 {
+        nil
+    } else {
+        (1..n+1).fold(|x, acc| x * acc, 1);
+    }
 };
