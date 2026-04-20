@@ -363,16 +363,39 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
         Expr::Print(obj) => {
             let obj = eval(&**obj, env.clone())?;
             match obj {
-                Value::Array(vc) => {
-                    for el in vc {
-                        match el {
-                            Value::Char(c) => print!("{}", c),
-                            _ => return Err(EvalError::TypeError("argument of print has to be a string"))
-                        }   
-                    }
+                Value::Number(n) => {
+                    print!("{}", n);
                     Ok(Value::Nil)
-                },
-                _ => Err(EvalError::TypeError("argument of print has to be a string"))
+                }
+                Value::Array(a) => {
+                    let is_string = a.iter().all(|v| matches!(v, Value::Char(_)));
+
+                    if is_string {
+                        for v in a {
+                            if let Value::Char(c) = v {
+                                print!("{}", c);
+                            }
+                        }
+                        Ok(Value::Nil)
+                    } else {
+                        for (i, v) in a.iter().enumerate() {
+                            if i > 0 {
+                                print!(" ");
+                            }
+                            print!("{}", v);
+                        }
+                        Ok(Value::Nil)
+                    }
+                }
+                Value::Nil => {
+                    print!("nil");
+                    Ok(Value::Nil)
+                }
+                Value::Char(c) => {
+                    print!("{}", c);
+                    Ok(Value::Nil)
+                }
+                _ => Err(EvalError::TypeError("can't print that type"))
             }
         }
         Expr::LogicalOp {
