@@ -36,7 +36,7 @@ fn run_file(path: &str, env: Rc<RefCell<Env>>) {
     };
     let result = eval::eval(&eval::Expr::Block(ast.clone()), env);
     match result {
-        Ok(ok) => println!("{}", ok),
+        Ok(_) => (),
         Err(err) => eprintln!("{}", err),
     }
 }

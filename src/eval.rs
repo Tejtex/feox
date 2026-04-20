@@ -3,6 +3,7 @@ pub use crate::ast::{BinOp, Expr};
 use num_traits::identities::Zero;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::io::{self, Read};
 use std::rc::Rc;
 use thiserror::Error;
 
@@ -339,6 +340,62 @@ pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
             match obj {
                 Value::Array(a) => Ok(Value::Number(a.len() as i64)),
                 _ => Err(EvalError::TypeError("argument of len has to be an array"))
+            }
+        }
+        Expr::Input => {
+            let lock = io::stdin().lock();
+            
+            let mut res: Vec<Value> = Vec::new();
+            let mut space = false;
+
+            for byte in lock.bytes() {
+                let b = byte.unwrap();
+                
+                if b.is_ascii_whitespace() {
+                    if space { break; }
+                } else {
+                    space = true;
+                    res.push(Value::Char(b as char));
+                }
+            }
+            Ok(Value::Array(res))
+        }
+        Expr::Print(obj) => {
+            let obj = eval(&**obj, env.clone())?;
+            match obj {
+                Value::Number(n) => {
+                    print!("{}", n);
+                    Ok(Value::Nil)
+                }
+                Value::Array(a) => {
+                    let is_string = a.iter().all(|v| matches!(v, Value::Char(_)));
+
+                    if is_string {
+                        for v in a {
+                            if let Value::Char(c) = v {
+                                print!("{}", c);
+                            }
+                        }
+                        Ok(Value::Nil)
+                    } else {
+                        for (i, v) in a.iter().enumerate() {
+                            if i > 0 {
+                                print!(" ");
+                            }
+                            print!("{}", v);
+                        }
+                        Ok(Value::Nil)
+                    }
+                }
+                Value::Nil => {
+                    print!("nil");
+                    Ok(Value::Nil)
+                }
+                Value::Char(c) => {
+                    print!("{}", c);
+                    Ok(Value::Nil)
+                }
+                _ => Err(EvalError::TypeError("can't print that type"))
             }
         }
         Expr::LogicalOp {

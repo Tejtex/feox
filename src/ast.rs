@@ -94,6 +94,8 @@ pub enum Expr {
     },
     
     Len(Box<Expr>),
+    Input,
+    Print(Box<Expr>),
     Push(Box<Expr>, Box<Expr>),
     
     LogicalOp {

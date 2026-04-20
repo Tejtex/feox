@@ -1,0 +1,8 @@
+mod 1e9+9 {
+    for x in (1..1e9+8) {
+        if x*x == 56480 {
+            print(x);
+            break;
+        };
+    };
+};  

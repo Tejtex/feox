@@ -57,7 +57,7 @@ method_call = { "." ~ ident ~ "(" ~ arg_list ~ ")" }
 index       = { "[" ~ expr ~ "]" }
 arg_list    = _{ (expr ~ ("," ~ expr)*)? }
 
-primary =  { push | len | array | block | literal | ident | "(" ~ expr ~ ")" }
+primary =  { push | len | input | print | array | block | literal | ident | "(" ~ expr ~ ")" }
 array   =  { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
 block   =  { "{" ~ stmt* ~ expr? ~ "}" }
 
@@ -69,4 +69,6 @@ return_   = { "return" ~ expr? }
 break_    = { "break" }
 continue_ = { "continue" }
 len      = { "len" ~ "(" ~ expr ~ ")" }
+input = { "input" ~ "(" ~ ")" }
+print = { "print" ~ "(" ~ expr ~ ")" }
 push     = {"push" ~ "(" ~ expr ~ "," ~ expr ~ ")"}
