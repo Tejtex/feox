@@ -62,6 +62,17 @@ let take = |iter, n| {
     }
 };
 
+let skip = |iter, n| {
+    let i = 0;
+    || {
+        while (i < n) {
+            let _ = iter();
+            i = i + 1;
+        };
+        iter()
+    }
+};
+
 let any = |iter| {
     let v = nil;
     while (v = iter()) != nil {
