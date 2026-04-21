@@ -269,7 +269,45 @@ fn parse_primary(pair: Pair<Rule>) -> Expr {
 
         Rule::string => {
             let s = inner.as_str();
-            Expr::String(s[1..s.len() - 1].to_string())
+            let st = s[1..s.len() - 1].to_string();
+            let mut chs = st.chars();
+            let mut res = String::new();
+
+            while let Some(c) = chs.next() {
+                if c == '\\' {
+                    match chs.next() {
+                        Some('n') => res.push('\n'),
+                        Some('r') => res.push('\r'),
+                        Some('t') => res.push('\t'),
+                        Some('"') => res.push('"'),
+                        Some('\\') => res.push('\\'),
+                        _ => unreachable!(),
+                    }
+                } else {
+                    res.push(c);
+                }
+            }
+            Expr::String(res)
+        }
+
+        Rule::char => {
+            let chars = inner.as_str().chars().collect::<Vec<_>>();
+            let c = chars[1];
+            Expr::Char(
+                if c == '\\' {
+                    match chars[2] {
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        '\'' => '\'',
+                        '\\' => '\\',
+                        _ => unreachable!(),
+                    }
+                }
+                else {
+                    c
+                }
+            )
         }
 
         Rule::bool => Expr::Bool(inner.as_str() == "true"),

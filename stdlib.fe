@@ -241,3 +241,47 @@ let fact = |n| {
         (1..n+1).fold(|x, acc| x * acc, 1);
     }
 };
+
+let stoi = |s| {
+    let res = 0;
+    let l = len(s);
+    let neg = 0;
+    for i in (0..l) {
+        if i == 0 && [s[i]] == "-" { neg = 1; continue; };
+        res = res * 10;
+        if [s[i]] == "1" { res = res + 1 };
+        if [s[i]] == "2" { res = res + 2 };
+        if [s[i]] == "3" { res = res + 3 };
+        if [s[i]] == "4" { res = res + 4 };
+        if [s[i]] == "5" { res = res + 5 };
+        if [s[i]] == "6" { res = res + 6 };
+        if [s[i]] == "7" { res = res + 7 };
+        if [s[i]] == "8" { res = res + 8 };
+        if [s[i]] == "9" { res = res + 9 };
+    };
+    if neg { return -res };
+    res
+};
+
+let itos = |n| {
+    let res = "";
+    let neg = n < 0;
+    n = abs(n);
+    if n == 0 { push(res, "0"[0]); return res; };
+    while n > 0 {
+        let r = n % 10;
+        if r == 0 { res = "0" + res; };
+        if r == 1 { res = "1" + res; };
+        if r == 2 { res = "2" + res; };
+        if r == 3 { res = "3" + res; };
+        if r == 4 { res = "4" + res; };
+        if r == 5 { res = "5" + res; };
+        if r == 6 { res = "6" + res; };
+        if r == 7 { res = "7" + res; };
+        if r == 8 { res = "8" + res; };
+        if r == 9 { res = "9" + res; };
+        n = n / 10;
+    };
+    if neg { res = "-" + res };
+    res
+};

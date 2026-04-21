@@ -12,6 +12,7 @@ impl PartialEq for Value {
         match (self, other) {
             (Value::Number(a), Value::Number(b)) => a == b,
             (Value::Array(a),  Value::Array(b)) => a == b,
+            (Value::Char(a), Value::Char(b)) => a == b,
             (Value::Nil, Value::Nil) => true,
             _ => false,
         }
@@ -322,6 +323,7 @@ type EvalResult = Result<Value, EvalError>;
 
 pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
     match expr {
+        Expr::Char(c) => Ok(Value::Char(*c)),
         Expr::Push(obj, expr) => {
             let obj = eval(&**obj, env.clone())?;
 
