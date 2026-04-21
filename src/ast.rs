@@ -14,6 +14,7 @@ pub struct Spanned<T> {
 #[derive(Debug, Clone)]
 pub enum Expr {
     String(String),
+    Char(char),
     Number(i64),
     Bool(bool),
     Array(Vec<Expr>),

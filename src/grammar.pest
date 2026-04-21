@@ -4,10 +4,11 @@ digits  = @{ ASCII_DIGIT+ }
 number  = @{ "-"? ~ digits }
 bignum  = @{ "-"? ~ digits ~ "e" ~ digits }
 string  = @{ "\"" ~ ( "\\\"" | "\\\\" | "\\n"  | "\\r"  | "\\t" | (!("\"" | "\\") ~ ANY))* ~ "\"" }
+char =    @{ "'"  ~ ( "\\'" | "\\\\" | "\\n" | "\\r" | "\\t" | (!("\"" | "\\") ~ ANY)) ~ "'"}
 bool    =  { "true" | "false" }
 nil     =  { "nil" }
 integer = _{ bignum | number }
-literal = _{ integer | string | bool | nil }
+literal = _{ integer | string | bool | nil | char }
 
 keyword = _{ "true" | "false" | "nil" | "if" | "else" | "while" | "for" | "in" | "mod" | "return" | "break" | "continue" | "let" }
 ident   = @{ !(keyword ~ !((ASCII_ALPHANUMERIC | "_")))~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -57,7 +58,7 @@ method_call = { "." ~ ident ~ "(" ~ arg_list ~ ")" }
 index       = { "[" ~ expr ~ "]" }
 arg_list    = _{ (expr ~ ("," ~ expr)*)? }
 
-primary =  { push | len | input | print | array | block | literal | ident | "(" ~ expr ~ ")" }
+primary =  { push | len | input | print | array | block | literal | ident | "(" ~ expr ~ ")"  }
 array   =  { "[" ~ (expr ~ ("," ~ expr)*)? ~ "]" }
 block   =  { "{" ~ stmt* ~ expr? ~ "}" }
 

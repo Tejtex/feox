@@ -323,6 +323,7 @@ type EvalResult = Result<Value, EvalError>;
 
 pub fn eval(expr: &Expr, env: EnvRef) -> EvalResult {
     match expr {
+        Expr::Char(c) => Ok(Value::Char(*c)),
         Expr::Push(obj, expr) => {
             let obj = eval(&**obj, env.clone())?;
 
