@@ -55,5 +55,5 @@ mod 1e9 + 9 {
 ### Installation
 Download the latest release from:
 
-https://github.com/feox-lang/feox/releases
+https://github.com/feox-lang/feox/releases 
 
