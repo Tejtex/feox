@@ -234,7 +234,9 @@ let fact = |n| {
 let stoi = |s| {
     let res = 0;
     let l = len(s);
+    let neg = 0;
     for i in (0..l) {
+        if i == 0 && [s[i]] == "-" { neg = 1; continue; };
         res = res * 10;
         if [s[i]] == "1" { res = res + 1 };
         if [s[i]] == "2" { res = res + 2 };
@@ -246,6 +248,7 @@ let stoi = |s| {
         if [s[i]] == "8" { res = res + 8 };
         if [s[i]] == "9" { res = res + 9 };
     };
+    if neg { return -res };
     res
 };
 
