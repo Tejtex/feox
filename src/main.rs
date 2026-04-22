@@ -1,7 +1,8 @@
 use feox::eval::{Env, Expr};
 use feox::{eval, parser};
+use rustyline::{Cmd, DefaultEditor, KeyEvent};
+use rustyline::error::ReadlineError;
 use std::cell::RefCell;
-use std::io::{self, Write};
 use std::rc::Rc;
 use std::{env, fs};
 
@@ -41,13 +42,14 @@ fn run_file(path: &str, env: Rc<RefCell<Env>>) {
     }
 }
 
-fn read_input() -> String {
+fn read_input(rl: &mut DefaultEditor) -> Result<String, ReadlineError> {
     let mut input = String::new();
     let mut depth = 0;
 
     loop {
-        let mut line = String::new();
-        std::io::stdin().read_line(&mut line).unwrap();
+        let prompt = if depth > 0 { "... " } else { "> " };
+
+        let line = rl.readline(prompt)?;
 
         for c in line.chars() {
             match c {
@@ -56,27 +58,37 @@ fn read_input() -> String {
                 _ => {}
             }
         }
-
+        
         input.push_str(&line);
+        input.push('\n');
 
-        if depth <= 0 { break; }
-        print!("... ");
-        std::io::stdout().flush().unwrap();
+        if depth <= 0 {
+            break;
+        }
     }
-
-    input
+    Ok(input)
 }
 
 fn repl(env: &Rc<RefCell<Env>>) {
     println!("Feox REPL (type 'exit' to quit)");
+    let mut rl = DefaultEditor::new().unwrap();
+
+    rl.bind_sequence(KeyEvent::ctrl('j'), Cmd::Insert(1, "\n".into()));
+    rl.bind_sequence(KeyEvent::from('\t'), Cmd::Insert(1, "    ".into()));
 
     loop {
-        print!("> ");
-        io::stdout().flush().unwrap();
-
-        let line = read_input();
+        let line = match read_input(&mut rl) {
+            Ok(line) => line,
+            Err(ReadlineError::Interrupted) => break,
+            Err(ReadlineError::Eof) => break,
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
+                break;
+            }
+        };
 
         let line = line.trim();
+        rl.add_history_entry(line).unwrap();
 
         if line == "exit" {
             break;
