@@ -145,6 +145,9 @@ impl Env {
     pub fn rem(&self, lhs: Value, rhs: Value) -> EvalResult {
         match (lhs, rhs) {
             (Value::Number(a), Value::Number(b)) => {
+                if b == 0 {
+                    return Err(EvalError::DivisionByZero);
+                }
                 Ok(Value::Number(self.modded(((a % b) + b) % b)))
             }
 
