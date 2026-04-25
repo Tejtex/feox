@@ -31,6 +31,29 @@ impl PartialOrd for Value {
     }
 }
 
+// Helper functions for the modulo operations
+fn extended_gcd(a: i64, b: i64) -> (i64, i64, i64) {
+    if b == 0 {
+        return (a,1,0);
+    }
+    let (g, x1, y1) = extended_gcd(b, a%b);
+    (g, y1, x1 - (a / b) * y1)
+}
+fn inverse_mod(a: i64, modulus: i64) -> Result<i64, EvalError> {
+    if modulus <= 0 {
+        return Err(EvalError::InvalidModulus(modulus));
+    }
+    let a = a.rem_euclid(modulus);
+    let (g, x, _) = extended_gcd(a, modulus);
+    if g != 1 {
+        return Err(EvalError::NonInvertibleModulo {
+            value: a,
+            modulus,
+        });
+    }
+    Ok(x.rem_euclid(modulus))
+}
+
 type EnvRef = Rc<RefCell<Env>>;
 #[derive(Clone)]
 pub struct Env {
@@ -145,7 +168,10 @@ impl Env {
     pub fn rem(&self, lhs: Value, rhs: Value) -> EvalResult {
         match (lhs, rhs) {
             (Value::Number(a), Value::Number(b)) => {
-                Ok(Value::Number(self.modded(((a % b) + b) % b)))
+                if b == 0 {
+                    return Err(EvalError::DivisionByZero);
+                }
+                Ok(Value::Number(self.modded(a.rem_euclid(b))))
             }
 
             (_, _) => Err(EvalError::TypeError("unsupported types for `%`")),
@@ -213,13 +239,13 @@ impl Env {
     pub fn div(&self, lhs: Value, rhs: Value) -> EvalResult {
         match (&lhs, &rhs) {
             (&Value::Number(a), &Value::Number(b)) => {
+                if b == 0 {
+                    return Err(EvalError::DivisionByZero);
+                }
                 if let Some(modulus) =( &self.modulus).last() {
-                    let rhs = match self.pow(rhs, Value::Number(modulus - 2)) {
-                        Ok(v) => v,
-                        other => return other,
-                    };
-
-                    self.mul(rhs, lhs)
+                    let inv = inverse_mod(b, *modulus)?;
+                    let res = ((a as i128) * (inv as i128)).rem_euclid(*modulus as i128) as i64;
+                    Ok(Value::Number(res))
                 } else {
                     Ok(Value::Number(a / b))
                 }
@@ -265,6 +291,13 @@ pub enum EvalError {
     UndefinedVariable(String),
     #[error("division by zero")]
     DivisionByZero,
+    #[error("invalid modulus: {0}")]
+    InvalidModulus(i64),
+    #[error("value {value} has no inverse modulo {modulus}")]
+    NonInvertibleModulo {
+        value: i64,
+        modulus: i64,
+    },
     #[error("continue outside of loop")]
     Continue,
     #[error("break outside of loop")]
@@ -528,6 +561,9 @@ fn eval_mod(modulus: &Box<Expr>, body: &Box<Expr>, env: EnvRef) -> EvalResult {
         Value::Number(n) => n,
         _ => return Err(EvalError::TypeError("modulus has to be a number")),
     };
+    if modulus <= 0 {
+        return Err(EvalError::InvalidModulus(modulus));
+    }
     env.borrow_mut().set_modulus(modulus);
 
     let res = eval(&**body, env.clone());
