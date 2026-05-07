@@ -423,3 +423,25 @@ let count = |iter, f| {
 let count_val = |iter, value| {
     iter.count(|x| x == value)
 };
+
+let spf = |n| {
+    if n < 2 {
+        return nil
+    };
+    for p in small_primes.into_iter() {
+        if n % p == 0 {
+            return p
+        };
+    };
+    if n < 1369 {
+        return n
+    };
+    let i = 41;
+    while i * i <= n {
+        if n % i == 0 {
+            return i
+        };
+        i = i + 2
+    };
+    n
+}
