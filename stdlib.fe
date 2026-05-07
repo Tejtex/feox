@@ -423,3 +423,37 @@ let count = |iter, f| {
 let count_val = |iter, value| {
     iter.count(|x| x == value)
 };
+
+let sort = |a| {
+    let qsort = |l, r| {
+        if l >= r {
+            return nil;
+        };
+        let pivot = a[(l + r) / 2];
+        let i = l;
+        let j = r;
+        while i <= j {
+            while a[i] < pivot {
+                i = i + 1;
+            };
+            while a[j] > pivot {
+                j = j - 1;
+            };
+            if i <= j {
+                let tmp = a[i];
+                a[i] = a[j];
+                a[j] = tmp;
+                i = i + 1;
+                j = j - 1;
+            };
+        };
+        if l < j {
+            qsort(l, j);
+        };
+        if i < r {
+            qsort(i, r);
+        };
+    };
+    qsort(0, len(a) - 1);
+    a
+};
