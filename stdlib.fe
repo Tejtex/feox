@@ -457,3 +457,25 @@ let sort = |a| {
     qsort(0, len(a) - 1);
     a
 };
+
+let spf = |n| {
+    if n < 2 { 
+        return nil 
+    };
+    for p in small_primes.into_iter() {
+        if n % p == 0 { 
+            return p 
+        };
+    };
+    if n < 1369 { 
+        return n
+    };
+    let p = 41;
+    while p * p <= n {
+        if n % p == 0 {
+            return p 
+        };
+        p = p + 2;
+    };
+    n
+};

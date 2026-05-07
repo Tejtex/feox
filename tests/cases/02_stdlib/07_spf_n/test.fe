@@ -1,0 +1,13 @@
+print(spf(1));
+print("\n");
+print(spf(5));
+print("\n");
+print(spf(12));
+print("\n");
+print(spf(45));
+print("\n");
+print(spf(67));
+print("\n");
+print(spf(99));
+print("\n");
+print(spf(998244353));
